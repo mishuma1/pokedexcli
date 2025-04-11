@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+	"time"
+
+	"github.com/mishuma1/pokemon/cache"
 )
 
 func TestCleanInput(t *testing.T) {
@@ -44,4 +47,23 @@ func TestCleanInput(t *testing.T) {
 		}
 	}
 
+	var restTime int64 = 2
+	cacheTest := cache.Cache{}
+	cacheTest.NewCache(restTime, restTime)
+	key := "test"
+	val := []byte("This is a test")
+	cacheTest.AddCache(key, val)
+	resultSize := cacheTest.CacheSize()
+	if resultSize == 0 {
+		t.Errorf("Cache should not be empty")
+	}
+	lookup := cacheTest.GetCache(key)
+	if len(lookup) == 0 {
+		t.Errorf("Cache result should not be empty")
+	}
+	time.Sleep(time.Second * time.Duration(restTime+2))
+	resultSize = cacheTest.CacheSize()
+	if resultSize != 0 {
+		t.Errorf("Cache should  be empty")
+	}
 }
