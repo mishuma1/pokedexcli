@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 )
@@ -71,7 +72,6 @@ func CommandMap(url string) error {
 }
 
 func CommandMapNext(config Poke_location) error {
-	fmt.Printf("MAP Trying: %s\n", config.Next)
 	err := CommandMap(config.Next)
 	return err
 }
@@ -80,35 +80,44 @@ func CommandMapPrevious(config Poke_location) error {
 	if config.Previous == "" {
 		config.Previous = config.Next
 	}
-	fmt.Printf("MAPB Trying: %s\n", config.Previous)
 	err := CommandMap(config.Previous)
 	return err
 }
 
 func CommandExplore(config Poke_location) error {
-	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%v", config.Explore)
-	//jsonCache := newCache.GetCache(url)
-	//if len(jsonCache) == 0 {
-	resp, errResp := http.Get(url)
-	if errResp != nil {
-		return fmt.Errorf("error exploring pokemon location: %v", errResp)
+
+	if len(config.FullCommand) < 2 {
+		return fmt.Errorf("missing location")
 	}
 
-	jsonBytes, errRead := io.ReadAll(resp.Body)
-	if errRead != nil {
-		return fmt.Errorf("error parsing poke explore data: %v", errRead)
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%v", config.FullCommand[1])
+
+	jsonCache := newCache.GetCache(url)
+	if len(jsonCache) == 0 {
+
+		resp, errResp := http.Get(url)
+		if errResp != nil {
+			return fmt.Errorf("error exploring pokemon location: %v", errResp)
+		}
+
+		if resp.StatusCode == 404 {
+			return fmt.Errorf("location data: %v not found", config.FullCommand[1])
+		}
+
+		jsonBytes, errRead := io.ReadAll(resp.Body)
+		if errRead != nil {
+			return fmt.Errorf("error parsing poke explore data: %v", errRead)
+		}
+		jsonCache = jsonBytes
+		newCache.AddCache(url, jsonCache)
+	} else {
+		fmt.Println("Using Cache Data")
 	}
-	//jsonCache = jsonBytes
-	//newCache.AddCache(url, jsonCache)
-	//} else {
-	//	fmt.Println("Using Cache Data")
-	//}
-	//fmt.Printf("Explore JSON: %v", string(jsonBytes))
 
 	ExploreData := List_Pokemon{}
-	errUn := json.Unmarshal(jsonBytes, &ExploreData)
+	errUn := json.Unmarshal(jsonCache, &ExploreData)
 	if errUn != nil {
-		return fmt.Errorf("error unmarshalling poke data: %v", errUn)
+		return fmt.Errorf("explore location: not found")
 	}
 
 	for _, val := range ExploreData.Pokemon_encounters {
@@ -118,4 +127,79 @@ func CommandExplore(config Poke_location) error {
 	return nil
 }
 
-//https://pokeapi.co/api/v2/location-area/
+func CommandCatch(config Poke_location) error {
+
+	if len(config.FullCommand) < 2 {
+		return fmt.Errorf("missing pokemon")
+	}
+
+	_, ok := MyPokemons[config.FullCommand[1]]
+	if ok {
+		return fmt.Errorf("already caught a %v", config.FullCommand[1])
+	}
+
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%v", config.FullCommand[1])
+
+	jsonCache := newCache.GetCache(url)
+	if len(jsonCache) == 0 {
+
+		resp, errResp := http.Get(url)
+		if errResp != nil {
+			return fmt.Errorf("error pulling pokemon species data: %v", errResp)
+		}
+		if resp.StatusCode == 404 {
+			return fmt.Errorf("species data: %v not found", config.FullCommand[1])
+		}
+
+		jsonBytes, errRead := io.ReadAll(resp.Body)
+		if errRead != nil {
+			return fmt.Errorf("error parsing poke species data: %v", errRead)
+		}
+		jsonCache = jsonBytes
+		newCache.AddCache(url, jsonCache)
+	} else {
+		fmt.Println("Using Cache Data")
+	}
+
+	SpeciesData := Pokemon{}
+	errUn := json.Unmarshal(jsonCache, &SpeciesData)
+	if errUn != nil {
+		return fmt.Errorf("unmarshal error: %v", errUn.Error())
+	}
+
+	SpeciesData = AssignToFields(SpeciesData)
+	fmt.Printf("Throwing a Pokeball at %v...\n", SpeciesData.Name)
+
+	//Try and capture
+	chance := rand.Intn(SpeciesData.Base_experience * 12)
+	if chance/10 >= SpeciesData.Base_experience {
+		fmt.Printf("%v was caught!\n", SpeciesData.Name)
+		MyPokemons[SpeciesData.Name] = SpeciesData
+		return nil
+	}
+	fmt.Printf("%v escaped!\n", SpeciesData.Name)
+
+	return nil
+}
+
+func CommandInspect(config Poke_location) error {
+
+	if len(config.FullCommand) < 2 {
+		return fmt.Errorf("missing pokemon")
+	}
+
+	pokemon, ok := MyPokemons[config.FullCommand[1]]
+	if !ok {
+		return fmt.Errorf("you have not caught a %v", config.FullCommand[1])
+	}
+	PrintPokemonInfo(pokemon)
+	return nil
+}
+
+func CommandPokedex(config Poke_location) error {
+	fmt.Printf("Your Pokedex:\n")
+	for idx := range MyPokemons {
+		fmt.Printf("\t- %v\n", idx)
+	}
+	return nil
+}

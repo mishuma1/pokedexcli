@@ -11,6 +11,7 @@ import (
 
 var LocationData Poke_location
 var newCache cache.Cache
+var MyPokemons map[string]Pokemon
 
 func cleanInput(text string) []string {
 	word_split := strings.Split(text, " ")
@@ -26,6 +27,7 @@ func cleanInput(text string) []string {
 
 func main() {
 	LocationData.Next = "https://pokeapi.co/api/v2/location-area?offset=0&limit=20"
+	MyPokemons = map[string]Pokemon{}
 	Commands = map[string]CliCommand{
 		"help": {
 			name:        "help",
@@ -47,6 +49,21 @@ func main() {
 			description: "Explore a location for pokemon",
 			callback:    CommandExplore,
 		},
+		"catch": {
+			name:        "catch",
+			description: "Try and catch a pokemon",
+			callback:    CommandCatch,
+		},
+		"inspect": {
+			name:        "inspect",
+			description: "View a captured pokemon",
+			callback:    CommandInspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "List your captured pokemon",
+			callback:    CommandPokedex,
+		},
 		"exit": {
 			name:        "exit",
 			description: "Exit the Pokedex",
@@ -54,14 +71,10 @@ func main() {
 		},
 	}
 
-	//map[string]Cache
 	newCache = cache.Cache{}
 	newCache.NewCache(30, 300)
 
 	for {
-		//map config : https://pokeapi.co/api/v2/location-area
-		//?offset=20&limit=20
-
 		input := bufio.NewScanner(os.Stdin)
 		fmt.Print("Pokedex > ")
 		for input.Scan() {
@@ -70,20 +83,17 @@ func main() {
 			cleanWords := cleanInput(text)
 			if len(cleanWords) >= 1 {
 				commandToExecute, ok := Commands[cleanWords[0]]
-				if cleanWords[0] == "explore" {
-					if len(cleanWords) > 1 {
-						LocationData.Explore = cleanWords[1]
-						commandToExecute.callback(LocationData)
-					} else {
-						fmt.Printf("Missing location\n")
-					}
+				LocationData.FullCommand = cleanWords
+
+				if !ok {
+					fmt.Printf("Unknown command\n")
 				} else {
-					if !ok {
-						fmt.Printf("Unknown command\n")
-					} else {
-						commandToExecute.callback(LocationData)
+					errCom := commandToExecute.callback(LocationData)
+					if errCom != nil {
+						fmt.Printf("%v\n", errCom.Error())
 					}
 				}
+
 			}
 
 			//fmt.Printf("Your command was: %v\n", cleanWords[0])
